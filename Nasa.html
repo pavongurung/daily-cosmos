@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NASA APOD | Minimalist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Lora:ital@0;1&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'bg-main': '#0f1012',     // Very deep charcoal/black
+                        'bg-card': '#18181b',     // Slightly lighter for contrast
+                        'text-primary': '#f8fafc',
+                        'text-secondary': '#94a3b8',
+                        'accent': '#e2e8f0',      // Subtle white/gray accent
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Lora', 'serif'], // For the title/dates to give a sophisticated feel
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.8s ease-out forwards',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0f1012;
+            color: #f8fafc;
+        }
+        
+        /* Custom Date Picker Styling for Minimalism */
+        input[type="date"] {
+            background: transparent;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            border-radius: 4px;
+            padding: 4px 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.875rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+        input[type="date"]:hover, input[type="date"]:focus {
+            color: #f8fafc;
+            border-color: #94a3b8;
+        }
+        ::-webkit-calendar-picker-indicator {
+            filter: invert(1) opacity(0.5);
+            cursor: pointer;
+        }
+        
+        /* Hide scrollbar for clean look */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f1012; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6 md:p-12 font-sans antialiased selection:bg-white selection:text-black">
+
+    <div class="max-w-6xl w-full mx-auto">
+        
+        <!-- Header: Simple & Clean --><header class="flex flex-col md:flex-row justify-between items-end border-b border-white/10 pb-6 mb-10 animate-fade-in" style="animation-delay: 0.1s;">
+            <div>
+                <h5 class="text-xs font-medium tracking-[0.2em] text-text-secondary uppercase mb-2">Daily Cosmos</h5>
+                <h1 class="text-3xl md:text-4xl font-serif text-text-primary">Astronomy Picture of the Day</h1>
+            </div>
+            <div class="mt-4 md:mt-0 flex flex-col items-end">
+                <label for="apod-date-picker" class="text-[10px] uppercase tracking-widest text-text-secondary mb-1">Select Date</label>
+                <input type="date" id="apod-date-picker">
+            </div>
+        </header>
+
+        <!-- Loading State --><div id="loading" class="flex flex-col items-center justify-center py-32 space-y-4">
+            <div class="w-12 h-12 border-2 border-white/10 border-t-white rounded-full animate-spin"></div>
+            <p class="text-sm text-text-secondary tracking-wider font-light">RETRIEVING DATA</p>
+        </div>
+
+        <!-- Error State --><div id="error-message" class="hidden text-center py-20">
+            <p class="text-red-400 font-serif italic text-lg">Unable to load the artifact.</p>
+            <p class="text-text-secondary text-sm mt-2">Please verify your connection or try a different date.</p>
+        </div>
+
+        <!-- Main Content --><main id="content" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-12 opacity-0 transition-opacity duration-700 ease-in-out">
+            
+            <!-- Image/Media Column (Spans 7 columns) --><div class="lg:col-span-7 flex flex-col">
+                <div class="relative bg-bg-card rounded overflow-hidden shadow-2xl shadow-black/50">
+                    <div id="media-placeholder" class="w-full min-h-[400px] md:min-h-[500px] flex items-center justify-center bg-bg-card">
+                        <!-- Media injected here --></div>
+                </div>
+                <p class="mt-3 text-xs text-text-secondary/60 font-mono text-right">Image Credit: NASA / APOD</p>
+            </div>
+
+            <!-- Text/Info Column (Spans 5 columns) --><div class="lg:col-span-5 flex flex-col justify-center">
+                <div class="space-y-6">
+                    <div class="border-l border-white/20 pl-6">
+                        <span id="apod-date-display" class="block text-xs font-medium tracking-[0.15em] text-text-secondary uppercase mb-2"></span>
+                        <h2 id="apod-title" class="text-3xl md:text-4xl font-serif text-text-primary leading-tight"></h2>
+                    </div>
+                    
+                    <div class="prose prose-invert prose-p:text-text-secondary prose-p:font-light prose-p:leading-relaxed prose-p:text-base pl-6">
+                        <p id="apod-explanation"></p>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const BASE_API_URL = "https://api.nasa.gov/planetary/apod?api_key=MwzFSs6EiGCHnDgnPVPQAIKjfu6GCl8m2ULzftRn";
+            
+            const loadingEl = document.getElementById('loading');
+            const contentEl = document.getElementById('content');
+            const errorEl = document.getElementById('error-message');
+            const mediaPlaceholderEl = document.getElementById('media-placeholder');
+            const titleEl = document.getElementById('apod-title');
+            const dateDisplayEl = document.getElementById('apod-date-display');
+            const explanationEl = document.getElementById('apod-explanation');
+            const datePickerEl = document.getElementById('apod-date-picker');
+
+            // Date formatting utility
+            const formatDate = (date) => {
+                const d = new Date(date);
+                let month = '' + (d.getMonth() + 1);
+                let day = '' + d.getDate();
+                const year = d.getFullYear();
+                if (month.length < 2) month = '0' + month;
+                if (day.length < 2) day = '0' + day;
+                return [year, month, day].join('-');
+            };
+
+            // Display date utility (e.g. "October 24, 2023")
+            const formatDisplayDate = (dateString) => {
+                const options = { year: 'numeric', month: 'long', day: 'numeric' };
+                return new Date(dateString).toLocaleDateString('en-US', options);
+            };
+
+            // Initialize Date Picker
+            const today = new Date();
+            const todayFormatted = formatDate(today);
+            datePickerEl.max = todayFormatted;
+            datePickerEl.value = todayFormatted;
+
+            // Retry Logic
+            const withBackoff = async (fn, retries = 3) => {
+                let attempt = 0;
+                while (attempt < retries) {
+                    try {
+                        return await fn();
+                    } catch (error) {
+                        attempt++;
+                        if (attempt >= retries) throw error;
+                        await new Promise(resolve => setTimeout(resolve, 800));
+                    }
+                }
+            };
+
+            // Data Fetching
+            const fetchData = async (date = todayFormatted) => {
+                // Transition Out
+                contentEl.classList.add('opacity-0');
+                
+                // Short delay to allow fade out before showing loader
+                setTimeout(async () => {
+                    contentEl.classList.add('hidden');
+                    loadingEl.classList.remove('hidden');
+                    errorEl.classList.add('hidden');
+
+                    let url = BASE_API_URL;
+                    if (date) url += `&date=${date}`;
+
+                    try {
+                        const response = await withBackoff(async () => {
+                            const res = await fetch(url);
+                            if (res.status === 429) {
+                                throw new Error("Rate Limit Exceeded");
+                            }
+                            if (!res.ok) {
+                                throw new Error(`HTTP error! status: ${res.status}`);
+                            }
+                            return res.json();
+                        });
+                        renderAPOD(response);
+                    } catch (error) {
+                        console.warn("NASA API failed (likely Demo Key limits), loading fallback.", error);
+                        
+                        // FALLBACK DATA
+                        // Used when DEMO_KEY rate limits are hit (very common)
+                        const fallbackData = {
+                            title: "The Sombrero Galaxy (Offline Mode)",
+                            date: date || todayFormatted,
+                            explanation: "We are currently viewing an archived image because the NASA API demo key rate limit has been reached for this IP address. This is M104, the Sombrero Galaxy, featuring a bright white core encircled by thick dust lanes. It lies 28 million light-years from Earth.",
+                            media_type: "image",
+                            url: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/M104_ngc4594_sombrero_galaxy_hi-res.jpg/1280px-M104_ngc4594_sombrero_galaxy_hi-res.jpg"
+                        };
+                        
+                        renderAPOD(fallbackData, true);
+                    }
+                }, 300);
+            };
+
+            const renderAPOD = (data, isFallback = false) => {
+                // Populate Data
+                titleEl.textContent = data.title;
+                dateDisplayEl.textContent = formatDisplayDate(data.date);
+                
+                if (isFallback) {
+                     explanationEl.innerHTML = `<span class="text-yellow-500 font-bold tracking-wide text-xs uppercase mr-2">[API Rate Limited]</span>` + data.explanation;
+                } else {
+                     explanationEl.textContent = data.explanation;
+                }
+               
+                mediaPlaceholderEl.innerHTML = '';
+
+                // Handle Media
+                if (data.media_type === 'video') {
+                    const iframe = document.createElement('iframe');
+                    iframe.src = data.url;
+                    iframe.frameBorder = "0";
+                    iframe.allow = "autoplay; encrypted-media";
+                    iframe.allowFullscreen = true;
+                    // Adjusted to 'object-cover' for videos
+                    iframe.className = "w-full h-full aspect-video object-cover"; 
+                    mediaPlaceholderEl.appendChild(iframe);
+                    
+                    loadingEl.classList.add('hidden');
+                    contentEl.classList.remove('hidden');
+                    setTimeout(() => contentEl.classList.remove('opacity-0'), 50);
+                } else {
+                    const img = document.createElement('img');
+                    img.src = data.url;
+                    img.alt = data.title;
+                    // Adjusted to 'object-cover' for images
+                    img.className = "w-full h-full object-cover max-h-[80vh]"; 
+                    
+                    // Wait for image to load before fading in content
+                    img.onload = () => {
+                        loadingEl.classList.add('hidden');
+                        contentEl.classList.remove('hidden');
+                        // Slight delay for smooth visual
+                        setTimeout(() => contentEl.classList.remove('opacity-0'), 50);
+                    };
+                    
+                    img.onerror = () => {
+                        // If fallback image also fails, or real image fails
+                        if (!isFallback) {
+                             img.src = "https://placehold.co/800x600/18181b/94a3b8?text=Image+Unavailable";
+                        }
+                        loadingEl.classList.add('hidden');
+                        contentEl.classList.remove('hidden');
+                        setTimeout(() => contentEl.classList.remove('opacity-0'), 50);
+                    };
+                    
+                    mediaPlaceholderEl.appendChild(img);
+                }
+            };
+
+            // Event Listener
+            datePickerEl.addEventListener('change', (e) => {
+                if (e.target.value) fetchData(e.target.value);
+            });
+
+            // Initial Load
+            fetchData(todayFormatted);
+        });
+    </script>
+</body>
+</html>
